@@ -32,7 +32,7 @@ def must_get(name: str) -> str:
 BOT_TOKEN = must_get("TELEGRAM_BOT_TOKEN")
 CHAT_ID   = must_get("TELEGRAM_CHAT_ID")
 
-MIN_CASH = Decimal(os.getenv("MIN_CASH_USD", "50000"))  # Updated default to match intended whale trades
+MIN_CASH = Decimal(os.getenv("MIN_CASH_USD", "10000"))  # Updated default to match intended whale trades
 SLEEP = float(os.getenv("POLL_INTERVAL_SEC", "3"))
 TAIL_THRESHOLD_PCT = float(os.getenv("TAIL_THRESHOLD_PCT", "10"))  # Updated default to 10%
 
@@ -185,7 +185,7 @@ def warm_start_if_needed():
     if os.path.exists(SEEN_FILE):
         return
     try:
-        trades = fetch_whales(limit=100)
+        trades = fetch_whales(limit=FETCH_LIMIT)
         for key, _ in aggregate_by_tx(trades):
             # key is (tx, asset)
             tx, asset = key
@@ -326,8 +326,9 @@ def current_mid(asset_id: str) -> Optional[str]:
     try:
         r = requests.get(MIDPOINT_URL, params={"token_id": asset_id}, timeout=5)
         if not r.ok:
+            # Cache all non-OK responses to reduce retry spam during outages
+            _midpoint_cache[asset_id] = (None, now + MIDPOINT_NEG_TTL_SEC)
             if r.status_code == 404:
-                _midpoint_cache[asset_id] = (None, now + MIDPOINT_NEG_TTL_SEC)
                 return None
             else:
                 print(f"Midpoint API failed for asset {asset_id}: HTTP {r.status_code}")

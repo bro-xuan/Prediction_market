@@ -1,3 +1,5 @@
 requests
 python-dotenv
 tenacity
+aiohttp
+python-telegram-bot
