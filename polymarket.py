@@ -2,6 +2,7 @@
 import asyncio
 import html
 import json
+import re
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -80,16 +81,29 @@ def trade_url(trade: Dict[str, Any]) -> str:
     return "https://polymarket.com/"
 
 def format_trade_message(trade: Dict[str, Any]) -> str:
+    ADDRESS_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
+    
     title = html.escape(trade.get("title") or "Unknown market")
     outcome = html.escape(trade.get("outcome") or "?")
     side = html.escape(trade.get("side") or "?")
     price = normalize_price(float(trade.get("price", 0)))
-    size = float(trade.get("size", 0))
     usd = trade_notional_usd(trade)
     ts = int(trade.get("timestamp", 0))
     when = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     url = trade_url(trade)
-    tx = trade.get("transactionHash", "")
+    # Polymarket uses 'proxyWallet' for the trader address
+    trader_address = trade.get("proxyWallet")
+    if isinstance(trader_address, str):
+        trader_address = trader_address.strip()
+    else:
+        trader_address = ""
+
+    # ✅ Format clickable short address
+    if ADDRESS_RE.match(trader_address):
+        trader_display = f"{trader_address[:6]}...{trader_address[-4:]}"
+        trader_html = f'<a href="https://polymarket.com/profile/{trader_address}">{trader_display}</a>'
+    else:
+        trader_html = "Unknown"
 
     msg = (
         f"<b>🐋 Large Polymarket trade</b>\n"
@@ -99,8 +113,8 @@ def format_trade_message(trade: Dict[str, Any]) -> str:
         f"<b>Price:</b> {price:.2%}\n"
         f"<b>Notional:</b> ${usd:,.0f}\n"
         f"<b>Time:</b> {when}\n"
-        f"<b>Tx:</b> <code>{tx}</code>\n"
-        f"🔗 <a href=\"{html.escape(url)}\">Open on Polymarket</a>"
+        f"🔗 <a href=\"{url}\">Open on Polymarket</a>\n"
+        f"<b>Trader:</b> {trader_html}\n"
     )
     return msg
 
